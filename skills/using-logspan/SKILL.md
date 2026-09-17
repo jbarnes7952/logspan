@@ -11,7 +11,7 @@ file, so it finishes in milliseconds regardless of file size. Run it instead
 of writing a timestamp-extraction pipeline; the output is already the answer.
 
 `logspan --help` lists all options and every timestamp format it recognises
-(Seastar, ISO-8601/RFC3339, syslog, Apache, epoch).
+(Seastar, ISO-8601/RFC3339, slash dates, syslog, glog/klog, Apache, epoch).
 
 ## Calling it
 
@@ -34,7 +34,7 @@ archives are not opened.
   JSON dumps and binary files report `no timestamp found`; that is expected.
 - A negative duration means the file is not chronological (for example a
   directory listing). Exclude it with `-g`.
-- `(year assumed)` marks year-less formats such as syslog. The file's
+- `(year assumed)` marks year-less formats such as syslog and glog. The file's
   modification year is used and a Dec to Jan wrap is handled, but a file
   spanning more than a year cannot be detected.
 - A trailing `Z` or offset in the output means the source had a zone (`Z`,

@@ -112,7 +112,9 @@ The same file lives at `src/logspan/completions/_logspan.zsh` in this repo
 |---|---|
 | Redpanda / Seastar | `INFO  2026-09-15 14:22:31,242 [shard 0] ...` |
 | ISO-8601 / RFC3339 (JSON `ts`, Go, Kubernetes, PostgreSQL) | `2026-09-14T00:01:45.414Z`, `2026-09-14 00:01:45.414+02:00`, `2026-09-14 00:01:45.414 UTC` |
+| Slash dates | `2026/09/15 14:22:31.242` |
 | syslog | `Sep 15 14:22:31` (no year: the file's mtime year is used, a Dec to Jan wrap is handled, row marked `(year assumed)`) |
+| glog / klog (Kubernetes components, etcd) | `I0915 14:22:31.242000 1 main.go:12]` (no year; handled like syslog) |
 | Apache / nginx access | `[15/Sep/2026:14:22:31 +0000]` |
 | Epoch seconds or millis at line start | `1789000000.123`, `1789000000123` |
 

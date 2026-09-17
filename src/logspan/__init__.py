@@ -20,11 +20,13 @@ Finds the first and last parseable timestamp in each file. Reads forward from
 the head and backward from the tail so large files are cheap. Handles:
   * Redpanda/Seastar:  INFO  2026-09-15 14:22:31,242 [shard 0] ...
   * ISO-8601 / RFC3339 (JSON "ts", Go, k8s):  2026-09-14T00:01:45.414Z
-  * ISO with space separator and dot/comma millis, optional zone
-    (Z, +02:00, -0500, UTC, GMT)
+  * ISO with space separator, dot/comma millis, optional zone
+    (Z, +02:00, -0500, UTC, GMT); also slash dates 2026/09/15 14:22:31
   * syslog:  Sep 15 14:22:31  (no year: the file's mtime year is assumed for
     the last entry, a Dec->Jan wrap moves the first entry back a year; such
     rows are marked "year assumed")
+  * glog/klog (Kubernetes, etcd):  I0915 14:22:31.242000 1 main.go:12]
+    (no year; handled like syslog)
   * Apache/nginx:  [15/Sep/2026:14:22:31 +0000]
   * Epoch seconds/millis at line start
 """
@@ -40,8 +42,10 @@ MONTHS = {m: i for i, m in enumerate(
     "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(), 1)}
 
 ISO = re.compile(
-    r"(?<!\d)(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})"
+    r"(?<!\d)(\d{4})([-/])(\d{2})\2(\d{2})[T ](\d{2}):(\d{2}):(\d{2})"
     r"(?:[.,](\d{1,9}))?\s*(Z|[+-]\d{2}:?\d{2}|UTC|GMT)?")
+# glog/klog (Kubernetes components, etcd): I0915 14:22:31.242000 threadid file:line]
+GLOG = re.compile(r"^[IWEF](\d{2})(\d{2}) (\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?\s+\d+ ")
 SYSLOG = re.compile(
     r"(?<![A-Za-z])(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})"
     r"\s+(\d{2}):(\d{2}):(\d{2})(?:[.,](\d{1,9}))?")
@@ -71,7 +75,7 @@ def parse_ts(line, default_year=None):
     get `default_year` (the current year if not given)."""
     m = ISO.search(line)
     if m:
-        y, mo, d, h, mi, s, frac, tz = m.groups()
+        y, _sep, mo, d, h, mi, s, frac, tz = m.groups()
         try:
             dt = datetime(int(y), int(mo), int(d), int(h), int(mi), int(s),
                           _frac_to_us(frac), tzinfo=_tz(tz) if tz else None)
@@ -93,6 +97,15 @@ def parse_ts(line, default_year=None):
             year = default_year or datetime.now().year
             return datetime(year, MONTHS[mon], int(d), int(h),
                             int(mi), int(s), _frac_to_us(frac)), False, True
+        except ValueError:
+            pass
+    m = GLOG.match(line)
+    if m:
+        mo, d, h, mi, s, frac = m.groups()
+        try:
+            year = default_year or datetime.now().year
+            return datetime(year, int(mo), int(d), int(h), int(mi), int(s),
+                            _frac_to_us(frac)), False, True
         except ValueError:
             pass
     m = EPOCH.search(line)

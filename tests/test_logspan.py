@@ -176,3 +176,42 @@ def test_syslog_year_wrap_uses_mtime_year_for_end(tmp_path):
 def test_year_assumed_false_for_dated_formats():
     assert logspan.span(f("seastar.log"))["year_assumed"] is False
     assert logspan.span(f("syslog.log"))["year_assumed"] is True
+
+
+def test_slash_date_format(tmp_path):
+    p = tmp_path / "slash.log"
+    p.write_text("2026/09/15 14:22:31.242 INFO a\n2026/09/15 15:22:31.242 INFO b\n")
+    r = logspan.span(str(p))
+    assert r["start"] == "2026-09-15 14:22:31.242"
+    assert r["duration"] == "1h 0m 0s"
+    assert r["year_assumed"] is False
+
+
+def test_mixed_separator_is_rejected():
+    assert logspan.parse_ts("2026-09/15 14:22:31 x") is None
+
+
+def test_glog_format_uses_mtime_year(tmp_path):
+    import time
+    p = tmp_path / "kubelet.log"
+    p.write_text("I0915 14:22:31.242000    1 main.go:12] start\n"
+                 "W0915 14:30:00.000000    1 main.go:99] warn\n"
+                 "E0915 16:22:31.242000  123 main.go:12] end\n")
+    t = time.mktime((2025, 9, 15, 17, 0, 0, 0, 0, -1))
+    os.utime(p, (t, t))
+    r = logspan.span(str(p))
+    assert r["start"] == "2025-09-15 14:22:31.242"
+    assert r["end"] == "2025-09-15 16:22:31.242"
+    assert r["duration"] == "2h 0m 0s"
+    assert r["year_assumed"] is True
+
+
+def test_glog_year_wrap(tmp_path):
+    import time
+    p = tmp_path / "etcd.log"
+    p.write_text("I1231 23:50:00.000000 1 a.go:1] x\nI0101 00:10:00.000000 1 a.go:1] y\n")
+    t = time.mktime((2025, 1, 1, 1, 0, 0, 0, 0, -1))
+    os.utime(p, (t, t))
+    r = logspan.span(str(p))
+    assert r["duration"] == "20m 0s"
+    assert r["start"].startswith("2024-12-31")
