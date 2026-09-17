@@ -75,3 +75,20 @@ def test_cli_json_and_table():
     v = subprocess.run([sys.executable, "-m", "logspan", "--version"],
                        capture_output=True, text=True, check=True).stdout
     assert v.strip() == f"logspan {logspan.__version__}"
+
+
+def test_skip_empty_flag():
+    run = lambda *a: subprocess.run([sys.executable, "-m", "logspan", *a],
+                                    capture_output=True, text=True).stdout
+    assert "(empty)" in run(FIX)
+    out = run("--skip-empty", FIX)
+    assert "(empty)" not in out and "seastar.log" in out
+    rows = [json.loads(l) for l in run("-j", "--skip-empty", FIX).splitlines()]
+    assert rows and all(r["status"] != "empty" for r in rows)
+    assert run("--skip-empty", f("empty.log")) == ""
+
+
+def test_unknown_flag_is_an_error():
+    r = subprocess.run([sys.executable, "-m", "logspan", "--bogus", FIX],
+                       capture_output=True, text=True)
+    assert r.returncode == 2 and "unknown option" in r.stderr

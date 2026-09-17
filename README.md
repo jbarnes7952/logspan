@@ -25,13 +25,15 @@ No dependencies beyond the Python 3.9+ standard library. The single file
 ## Usage
 
 ```
-logspan [-j] FILE|DIR ...
+logspan [-j] [--skip-empty] FILE|DIR ...
   -j            JSON output (one object per file)
+  --skip-empty  omit zero-byte files from the output
   -h, --help    show this help
   -V, --version show version
 ```
 
-Directories are expanded to their immediate files (not recursive).
+Directories are expanded to their immediate files (not recursive). Debug
+bundles contain many empty init-container logs; `--skip-empty` hides them.
 
 ```
 $ logspan redpanda-2-debug-bundle/logs

@@ -1,7 +1,8 @@
 """logspan - print start time, end time and duration of one or more log files.
 
-Usage: logspan [-j] FILE|DIR ...
+Usage: logspan [-j] [--skip-empty] FILE|DIR ...
   -j            JSON output (one object per file)
+  --skip-empty  omit zero-byte files from the output
   -h, --help    show this help
   -V, --version show version
 
@@ -206,11 +207,21 @@ def main(argv):
         print(__doc__.strip())
         return 0
     as_json = "-j" in argv
-    paths = [a for a in argv if a != "-j"]
+    skip_empty = "--skip-empty" in argv
+    flags = {"-j", "--skip-empty"}
+    unknown = [a for a in argv if a.startswith("-") and a not in flags]
+    if unknown:
+        print(f"logspan: unknown option {unknown[0]}", file=sys.stderr)
+        return 2
+    paths = [a for a in argv if a not in flags]
     if not paths:
         print(__doc__.strip(), file=sys.stderr)
         return 2
     rows = [span(p) for p in expand(paths)]
+    if skip_empty:
+        rows = [r for r in rows if r["status"] != "empty"]
+    if not rows:
+        return 0
     if as_json:
         for r in rows:
             print(json.dumps(r))
