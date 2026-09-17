@@ -25,7 +25,8 @@ Run `logspan --help` for the full option list.
 | Machine-readable | `logspan -j ... \| jq 'select(.status=="ok")'` |
 | Not installed? | `uv tool install git+ssh://git@github.com/jbarnes7952/logspan` |
 
-Quote `-g` patterns. Files named explicitly bypass the `-g` filter.
+Quote `-g` patterns. Files named explicitly bypass the `-g` filter. Zip
+archives are skipped, extract bundles first.
 
 ## Reading the output
 
@@ -40,7 +41,12 @@ Quote `-g` patterns. Files named explicitly bypass the `-g` filter.
   the Redpanda community' FILE`) means restart; no banner means the container
   log rotated just before collection.
 - **One broker with far longer coverage** is the quiet one; it is the only
-  place events from earlier will appear.
+  place events from earlier will appear. Check what it actually logs before
+  relying on it; a quiet broker may be all routine INFO lines.
+- **Several bundles from one Kubernetes cluster** each hold every broker's
+  log. Bundles collected at the same minute are one snapshot with duplicate
+  files; compare start timestamps and sizes across bundles before treating
+  them as independent evidence.
 - **Negative duration** means the file is not a chronological log (for
   example a directory listing with mtimes). Ignore it or exclude with `-g`.
 - **`no timestamp found`** on `.yaml`/`.json` dumps is expected, not an error.
@@ -60,9 +66,11 @@ listing with mtimes and gives a meaningless or negative duration. Use the
 ## Limits
 
 `logspan` uses only the first and last parseable timestamp. It does not detect
-gaps, out-of-order lines, or rate changes inside the file. When those matter,
-use `logspan` for the window first, then target a full scan at the specific
-file and range it identified.
+gaps, out-of-order lines, or rate changes inside the file. To confirm a time
+inside a long window is really present, count lines for that minute, for
+example `grep -c '^INFO  2026-09-15 13:5' FILE`. For anything deeper, use
+`logspan` for the window first, then target a full scan at the file and range
+it identified.
 
 ## Example
 
