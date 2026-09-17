@@ -1,11 +1,15 @@
 """logspan - print start time, end time and duration of one or more log files.
 
-Usage: logspan [-j] [-r] [--skip-empty] [--full-path] FILE|DIR ...
-  -j               JSON output (one object per file)
-  -r, --recursive  descend into subdirectories
-  --skip-empty     omit zero-byte files from the output
-  --full-path      show the full path in the table instead of the path
-                   relative to the directory argument
+Usage: logspan [-j] [-r] [-g PATTERN]... [--skip-empty] [--full-path] FILE|DIR ...
+  -j, --json        JSON output (one object per file)
+  -r, --recursive   descend into subdirectories
+  -g, --glob PAT    only consider files whose name matches PAT (fnmatch style,
+                    e.g. '*.log'); repeatable, or comma-separated. Applies to
+                    files found under directory arguments, not to files named
+                    explicitly. Quote the pattern so the shell does not expand it.
+  --skip-empty      omit zero-byte files from the output
+  --full-path       show the full path in the table instead of the path
+                    relative to the directory argument
   -h, --help    show this help
   -V, --version show version
 
@@ -20,7 +24,7 @@ the head and backward from the tail so large files are cheap. Handles:
   * Apache/nginx:  [15/Sep/2026:14:22:31 +0000]
   * Epoch seconds/millis at line start
 """
-import json, os, re, sys
+import argparse, fnmatch, json, os, re, sys
 
 __version__ = "0.1.0"
 from datetime import datetime, timezone, timedelta
@@ -192,47 +196,65 @@ def span(path, name=None):
             "duration": fmt_dur(dur), "duration_seconds": dur.total_seconds()}
 
 
-def expand(args, recursive=False):
+def matches(name, patterns):
+    return not patterns or any(fnmatch.fnmatch(name, g) for g in patterns)
+
+
+def expand(args, recursive=False, patterns=()):
     """Yield (path, display_name). Files under a directory argument are
-    displayed relative to that directory; bare file arguments as given."""
+    displayed relative to that directory and filtered by `patterns`
+    (matched against the basename); bare file arguments are always included."""
     for a in args:
         if os.path.isdir(a):
             if recursive:
                 for root, dirs, files in os.walk(a):
                     dirs.sort()
                     for n in sorted(files):
-                        p = os.path.join(root, n)
-                        yield p, os.path.relpath(p, a)
+                        if matches(n, patterns):
+                            p = os.path.join(root, n)
+                            yield p, os.path.relpath(p, a)
             else:
                 for n in sorted(os.listdir(a)):
                     p = os.path.join(a, n)
-                    if os.path.isfile(p):
+                    if os.path.isfile(p) and matches(n, patterns):
                         yield p, n
         else:
             yield a, a
 
 
+def build_parser():
+    ap = argparse.ArgumentParser(
+        prog="logspan", add_help=False,
+        description="Print size, line count, first/last timestamp and duration of log files.")
+    ap.add_argument("paths", nargs="*", metavar="FILE|DIR")
+    ap.add_argument("-j", "--json", action="store_true", dest="as_json")
+    ap.add_argument("-r", "--recursive", action="store_true")
+    ap.add_argument("-g", "--glob", action="append", default=[], metavar="PAT")
+    ap.add_argument("--skip-empty", action="store_true")
+    ap.add_argument("--full-path", action="store_true")
+    ap.add_argument("-h", "--help", action="store_true")
+    ap.add_argument("-V", "--version", action="store_true")
+    return ap
+
+
 def main(argv):
-    if "-V" in argv or "--version" in argv:
+    ap = build_parser()
+    try:
+        ns = ap.parse_args(argv)
+    except SystemExit:
+        return 2
+    if ns.version:
         print(f"logspan {__version__}")
         return 0
-    if "-h" in argv or "--help" in argv:
-        print(__doc__.strip())
-        return 0
-    as_json = "-j" in argv
-    skip_empty = "--skip-empty" in argv
-    recursive = "-r" in argv or "--recursive" in argv
-    full_path = "--full-path" in argv
-    flags = {"-j", "--skip-empty", "-r", "--recursive", "--full-path"}
-    unknown = [a for a in argv if a.startswith("-") and a not in flags]
-    if unknown:
-        print(f"logspan: unknown option {unknown[0]}", file=sys.stderr)
-        return 2
-    paths = [a for a in argv if a not in flags]
-    if not paths:
-        print(__doc__.strip(), file=sys.stderr)
-        return 2
-    rows = [span(p, p if full_path else n) for p, n in expand(paths, recursive)]
+    if ns.help or not ns.paths:
+        print(__doc__.strip(), file=sys.stdout if ns.help else sys.stderr)
+        return 0 if ns.help else 2
+    patterns = [g for chunk in ns.glob for g in chunk.split(",") if g]
+    as_json, skip_empty, recursive, full_path = (
+        ns.as_json, ns.skip_empty, ns.recursive, ns.full_path)
+    paths = ns.paths
+    rows = [span(p, p if full_path else n)
+            for p, n in expand(paths, recursive, patterns)]
     if skip_empty:
         rows = [r for r in rows if r["status"] != "empty"]
     if not rows:

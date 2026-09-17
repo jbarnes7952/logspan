@@ -25,12 +25,16 @@ No dependencies beyond the Python 3.9+ standard library. The single file
 ## Usage
 
 ```
-logspan [-j] [-r] [--skip-empty] [--full-path] FILE|DIR ...
-  -j               JSON output (one object per file)
-  -r, --recursive  descend into subdirectories
-  --skip-empty     omit zero-byte files from the output
-  --full-path      show the full path in the table instead of the path
-                   relative to the directory argument
+logspan [-j] [-r] [-g PATTERN]... [--skip-empty] [--full-path] FILE|DIR ...
+  -j, --json        JSON output (one object per file)
+  -r, --recursive   descend into subdirectories
+  -g, --glob PAT    only consider files whose name matches PAT (fnmatch style,
+                    e.g. '*.log'); repeatable, or comma-separated. Applies to
+                    files found under directory arguments, not to files named
+                    explicitly. Quote the pattern so the shell does not expand it.
+  --skip-empty      omit zero-byte files from the output
+  --full-path       show the full path in the table instead of the path
+                    relative to the directory argument
   -h, --help    show this help
   -V, --version show version
 ```
@@ -41,6 +45,15 @@ relative to that directory (`pods/redpanda-0/redpanda.txt`); pass `--full-path`
 to see the complete path instead. JSON output always has the full path in
 `file` and the display name in `name`. Debug bundles contain many empty
 init-container logs; `--skip-empty` hides them.
+
+Use `-g` to restrict which files under a directory are examined. Patterns are
+shell-style (`*`, `?`, `[...]`) and match the file name only, not the path.
+
+```
+$ logspan -r -g '*.txt' -g '*.log' --skip-empty bundle/
+$ logspan -r -g '*.txt,*.log' bundle/        # same thing
+$ logspan -g 'redpanda-*-redpanda.txt' bundle/logs
+```
 
 ```
 $ logspan -r --skip-empty bundle/

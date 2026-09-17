@@ -91,7 +91,7 @@ def test_skip_empty_flag():
 def test_unknown_flag_is_an_error():
     r = subprocess.run([sys.executable, "-m", "logspan", "--bogus", FIX],
                        capture_output=True, text=True)
-    assert r.returncode == 2 and "unknown option" in r.stderr
+    assert r.returncode == 2 and "unrecognized" in r.stderr
 
 
 def test_recursive_and_display_names(tmp_path):
@@ -111,3 +111,20 @@ def test_recursive_and_display_names(tmp_path):
     names = sorted(r["name"] for r in rows)
     assert names == sorted([os.path.join("a", "b", "deep.log"), "top.log"])
     assert all(os.path.isabs(r["file"]) for r in rows)
+
+
+def test_glob_filter(tmp_path):
+    (tmp_path / "sub").mkdir()
+    for n in ("a.log", "b.txt", "c.json", "sub/d.log", "sub/e.yaml"):
+        (tmp_path / n).write_text("INFO  2026-01-01 00:00:00,000 x\n")
+    run = lambda *a: [json.loads(l) for l in subprocess.run(
+        [sys.executable, "-m", "logspan", "-j", *a],
+        capture_output=True, text=True, check=True).stdout.splitlines()]
+    names = lambda rows: sorted(r["name"] for r in rows)
+    assert names(run("-g", "*.log", str(tmp_path))) == ["a.log"]
+    assert names(run("-r", "-g", "*.log", str(tmp_path))) == ["a.log", os.path.join("sub", "d.log")]
+    assert names(run("-g", "*.log", "-g", "*.txt", str(tmp_path))) == ["a.log", "b.txt"]
+    assert names(run("-g", "*.log,*.txt", str(tmp_path))) == ["a.log", "b.txt"]
+    # explicit file arguments bypass the filter
+    assert names(run("-g", "*.log", str(tmp_path / "c.json"))) == [str(tmp_path / "c.json")]
+    assert run("-g", "*.nomatch", str(tmp_path)) == []
