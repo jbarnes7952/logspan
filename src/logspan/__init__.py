@@ -11,8 +11,8 @@ Usage: logspan [-j] [-r] [-g PATTERN]... [--skip-empty] [--full-path] FILE|DIR .
   --full-path       show the full path in the table instead of the path
                     relative to the directory argument
   --completion zsh  print a zsh completion script (see README)
-  -h, --help    show this help
-  -V, --version show version
+  -h, --help        show this help
+  -V, --version     show version
 
 Columns: size, line count, first timestamp, last timestamp, duration.
 
@@ -20,7 +20,8 @@ Finds the first and last parseable timestamp in each file. Reads forward from
 the head and backward from the tail so large files are cheap. Handles:
   * Redpanda/Seastar:  INFO  2026-09-15 14:22:31,242 [shard 0] ...
   * ISO-8601 / RFC3339 (JSON "ts", Go, k8s):  2026-09-14T00:01:45.414Z
-  * ISO with space separator and dot/comma millis, optional tz offset
+  * ISO with space separator and dot/comma millis, optional zone
+    (Z, +02:00, -0500, UTC, GMT)
   * syslog:  Sep 15 14:22:31  (no year: the file's mtime year is assumed for
     the last entry, a Dec->Jan wrap moves the first entry back a year; such
     rows are marked "year assumed")

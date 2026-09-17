@@ -35,8 +35,9 @@ logspan [-j] [-r] [-g PATTERN]... [--skip-empty] [--full-path] FILE|DIR ...
   --skip-empty      omit zero-byte files from the output
   --full-path       show the full path in the table instead of the path
                     relative to the directory argument
-  -h, --help    show this help
-  -V, --version show version
+  --completion zsh  print a zsh completion script (see README)
+  -h, --help        show this help
+  -V, --version     show version
 ```
 
 Directories are expanded to their immediate files, or to everything beneath
@@ -77,7 +78,7 @@ JSON output is one object per line, suitable for `jq`:
 $ logspan -j redpanda-2-redpanda.txt
 {"file": "redpanda-2-redpanda.txt", "name": "redpanda-2-redpanda.txt", "size_bytes": 10333319, "size": "9.9M", "lines": 32491,
  "status": "ok", "start": "2026-09-15 14:24:30.060", "end": "2026-09-15 14:25:02.056",
- "duration": "31s", "duration_seconds": 31.996}
+ "duration": "31s", "duration_seconds": 31.996, "year_assumed": false}
 ```
 
 `status` is one of `ok`, `empty`, `no timestamp found`, `not found`. `year_assumed`
@@ -110,13 +111,13 @@ The same file lives at `src/logspan/completions/_logspan.zsh` in this repo
 | Style | Example |
 |---|---|
 | Redpanda / Seastar | `INFO  2026-09-15 14:22:31,242 [shard 0] ...` |
-| ISO-8601 / RFC3339 (JSON `ts`, Go, Kubernetes) | `2026-09-14T00:01:45.414Z`, `2026-09-14 00:01:45.414+02:00` |
+| ISO-8601 / RFC3339 (JSON `ts`, Go, Kubernetes, PostgreSQL) | `2026-09-14T00:01:45.414Z`, `2026-09-14 00:01:45.414+02:00`, `2026-09-14 00:01:45.414 UTC` |
 | syslog | `Sep 15 14:22:31` (no year: the file's mtime year is used, a Dec to Jan wrap is handled, row marked `(year assumed)`) |
 | Apache / nginx access | `[15/Sep/2026:14:22:31 +0000]` |
 | Epoch seconds or millis at line start | `1789000000.123`, `1789000000123` |
 
-Timestamps with a zone are printed with `Z` or an offset; naive ones are
-printed as-is. If the first and last timestamps disagree on having a zone,
+Timestamps with a zone (`Z`, a numeric offset, `UTC` or `GMT`) are printed
+with `Z` or an offset; naive ones are printed as-is. If the first and last timestamps disagree on having a zone,
 the duration is computed on the naive wall-clock values.
 
 ## Caveats
