@@ -1,0 +1,35 @@
+[project]
+name = "logspan"
+version = "0.1.0"
+description = "Print size, line count, first/last timestamp and duration of log files"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "John Barnes", email = "john.barnes@redpanda.com" }]
+keywords = ["logs", "redpanda", "debug-bundle", "timestamps"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: System :: Logging",
+]
+dependencies = []
+
+[project.scripts]
+logspan = "logspan:cli"
+
+[project.urls]
+Homepage = "https://github.com/johnbarnes/logspan"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/logspan"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

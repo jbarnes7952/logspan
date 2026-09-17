@@ -1,0 +1,3 @@
+INFO  2026-09-15 14:22:31,242 [shard 4:tr  ] cloud_storage - start
+WARN  2026-09-15 14:22:40,000 [shard 0] noise
+INFO  2026-09-15 14:25:12,255 [shard 5:tr  ] cloud_io - end

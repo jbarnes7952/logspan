@@ -1,0 +1,236 @@
+"""logspan - print start time, end time and duration of one or more log files.
+
+Usage: logspan [-j] FILE|DIR ...
+  -j            JSON output (one object per file)
+  -h, --help    show this help
+  -V, --version show version
+
+Columns: size, line count, first timestamp, last timestamp, duration.
+
+Finds the first and last parseable timestamp in each file. Reads forward from
+the head and backward from the tail so large files are cheap. Handles:
+  * Redpanda/Seastar:  INFO  2026-09-15 14:22:31,242 [shard 0] ...
+  * ISO-8601 / RFC3339 (JSON "ts", Go, k8s):  2026-09-14T00:01:45.414Z
+  * ISO with space separator and dot/comma millis, optional tz offset
+  * syslog:  Sep 15 14:22:31  (year assumed = current year)
+  * Apache/nginx:  [15/Sep/2026:14:22:31 +0000]
+  * Epoch seconds/millis at line start
+"""
+import json, os, re, sys
+
+__version__ = "0.1.0"
+from datetime import datetime, timezone, timedelta
+
+CHUNK = 256 * 1024          # bytes to scan at each end before giving up
+MAX_LINES = 5000            # lines to try at each end
+
+MONTHS = {m: i for i, m in enumerate(
+    "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(), 1)}
+
+ISO = re.compile(
+    r"(?<!\d)(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})"
+    r"(?:[.,](\d{1,9}))?\s*(Z|[+-]\d{2}:?\d{2})?")
+SYSLOG = re.compile(
+    r"(?<![A-Za-z])(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})"
+    r"\s+(\d{2}):(\d{2}):(\d{2})(?:[.,](\d{1,9}))?")
+APACHE = re.compile(
+    r"\[(\d{2})/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/(\d{4}):"
+    r"(\d{2}):(\d{2}):(\d{2})\s*([+-]\d{4})?\]")
+EPOCH = re.compile(r"^\s*\[?(\d{10})(?:[.,](\d{3,9})|(\d{3}))?\]?\b")
+
+
+def _frac_to_us(frac):
+    if not frac:
+        return 0
+    return int((frac + "000000")[:6])
+
+
+def _tz(s):
+    if not s or s == "Z":
+        return timezone.utc
+    s = s.replace(":", "")
+    sign = 1 if s[0] == "+" else -1
+    return timezone(sign * timedelta(hours=int(s[1:3]), minutes=int(s[3:5])))
+
+
+def parse_ts(line):
+    """Return (datetime, has_tz) for the first timestamp on the line, or None."""
+    m = ISO.search(line)
+    if m:
+        y, mo, d, h, mi, s, frac, tz = m.groups()
+        try:
+            dt = datetime(int(y), int(mo), int(d), int(h), int(mi), int(s),
+                          _frac_to_us(frac), tzinfo=_tz(tz) if tz else None)
+            return dt, bool(tz)
+        except ValueError:
+            pass
+    m = APACHE.search(line)
+    if m:
+        d, mon, y, h, mi, s, tz = m.groups()
+        try:
+            return datetime(int(y), MONTHS[mon], int(d), int(h), int(mi), int(s),
+                            tzinfo=_tz(tz) if tz else None), bool(tz)
+        except ValueError:
+            pass
+    m = SYSLOG.search(line)
+    if m:
+        mon, d, h, mi, s, frac = m.groups()
+        try:
+            return datetime(datetime.now().year, MONTHS[mon], int(d), int(h),
+                            int(mi), int(s), _frac_to_us(frac)), False
+        except ValueError:
+            pass
+    m = EPOCH.search(line)
+    if m:
+        secs, frac, ms = m.groups()
+        us = _frac_to_us(frac) if frac else (int(ms) * 1000 if ms else 0)
+        return datetime.fromtimestamp(int(secs), tz=timezone.utc).replace(
+            microsecond=us), True
+    return None
+
+
+def head_lines(path):
+    with open(path, "rb") as f:
+        data = f.read(CHUNK)
+    for i, ln in enumerate(data.splitlines()):
+        if i >= MAX_LINES:
+            break
+        yield ln.decode("utf-8", "replace")
+
+
+def tail_lines(path):
+    size = os.path.getsize(path)
+    with open(path, "rb") as f:
+        f.seek(max(0, size - CHUNK))
+        data = f.read()
+    lines = data.splitlines()
+    if size > CHUNK and lines:
+        lines = lines[1:]           # first line is probably partial
+    for i, ln in enumerate(reversed(lines)):
+        if i >= MAX_LINES:
+            break
+        yield ln.decode("utf-8", "replace")
+
+
+def first_ts(lines):
+    for ln in lines:
+        r = parse_ts(ln)
+        if r:
+            return r
+    return None
+
+
+def fmt_dt(dt):
+    s = dt.strftime("%Y-%m-%d %H:%M:%S.") + f"{dt.microsecond // 1000:03d}"
+    if dt.tzinfo:
+        off = dt.strftime("%z")
+        s += "Z" if off in ("+0000", "") else f"{off[:3]}:{off[3:]}"
+    return s
+
+
+def fmt_dur(td):
+    total = int(td.total_seconds())
+    neg = total < 0
+    total = abs(total)
+    d, rem = divmod(total, 86400)
+    h, rem = divmod(rem, 3600)
+    m, s = divmod(rem, 60)
+    parts = []
+    if d:
+        parts.append(f"{d}d")
+    if d or h:
+        parts.append(f"{h}h")
+    if d or h or m:
+        parts.append(f"{m}m")
+    parts.append(f"{s}s")
+    return ("-" if neg else "") + " ".join(parts)
+
+
+def fmt_size(n):
+    for unit in ("B", "K", "M", "G", "T"):
+        if n < 1024 or unit == "T":
+            return f"{n:.0f}{unit}" if unit == "B" else f"{n:.1f}{unit}"
+        n /= 1024
+
+
+def count_lines(path):
+    n = 0
+    last = b""
+    with open(path, "rb") as f:
+        for buf in iter(lambda: f.read(1 << 20), b""):
+            n += buf.count(b"\n")
+            last = buf[-1:]
+    if last and last != b"\n":
+        n += 1                      # unterminated final line
+    return n
+
+
+def span(path):
+    if not os.path.isfile(path):
+        return {"file": path, "size_bytes": 0, "size": "-", "lines": 0,
+                "status": "not found"}
+    size = os.path.getsize(path)
+    base = {"file": path, "size_bytes": size, "size": fmt_size(size),
+            "lines": count_lines(path) if size else 0}
+    if size == 0:
+        return {**base, "status": "empty"}
+    a = first_ts(head_lines(path))
+    b = first_ts(tail_lines(path))
+    if not a or not b:
+        return {**base, "status": "no timestamp found"}
+    (start, tz_a), (end, tz_b) = a, b
+    if tz_a != tz_b:                       # mixed aware/naive; compare naively
+        start, end = start.replace(tzinfo=None), end.replace(tzinfo=None)
+    dur = end - start
+    return {**base, "status": "ok",
+            "start": fmt_dt(start), "end": fmt_dt(end),
+            "duration": fmt_dur(dur), "duration_seconds": dur.total_seconds()}
+
+
+def expand(args):
+    for a in args:
+        if os.path.isdir(a):
+            for n in sorted(os.listdir(a)):
+                p = os.path.join(a, n)
+                if os.path.isfile(p):
+                    yield p
+        else:
+            yield a
+
+
+def main(argv):
+    if "-V" in argv or "--version" in argv:
+        print(f"logspan {__version__}")
+        return 0
+    if "-h" in argv or "--help" in argv:
+        print(__doc__.strip())
+        return 0
+    as_json = "-j" in argv
+    paths = [a for a in argv if a != "-j"]
+    if not paths:
+        print(__doc__.strip(), file=sys.stderr)
+        return 2
+    rows = [span(p) for p in expand(paths)]
+    if as_json:
+        for r in rows:
+            print(json.dumps(r))
+        return 0
+    w = max(len(os.path.basename(r["file"])) for r in rows)
+    print(f"{'file':<{w}}  {'size':>7} {'lines':>9}  {'start':<25} {'end':<25} duration")
+    for r in rows:
+        name = os.path.basename(r["file"])
+        pre = f"{name:<{w}}  {r['size']:>7} {r['lines']:>9,}  "
+        if r["status"] != "ok":
+            print(pre + f"({r['status']})")
+        else:
+            print(pre + f"{r['start']:<25} {r['end']:<25} {r['duration']}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
+
+
+def cli():
+    """Console-script entry point."""
+    sys.exit(main(sys.argv[1:]))
