@@ -5,7 +5,7 @@ description = "Print size, line count, first/last timestamp and duration of log 
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
-authors = [{ name = "John Barnes", email = "john.barnes@redpanda.com" }]
+authors = [{ name = "John Barnes", email = "jbarnes7952@gmail.com" }]
 keywords = ["logs", "redpanda", "debug-bundle", "timestamps"]
 classifiers = [
   "Programming Language :: Python :: 3",
