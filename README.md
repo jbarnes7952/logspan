@@ -25,15 +25,29 @@ No dependencies beyond the Python 3.9+ standard library. The single file
 ## Usage
 
 ```
-logspan [-j] [--skip-empty] FILE|DIR ...
-  -j            JSON output (one object per file)
-  --skip-empty  omit zero-byte files from the output
+logspan [-j] [-r] [--skip-empty] [--full-path] FILE|DIR ...
+  -j               JSON output (one object per file)
+  -r, --recursive  descend into subdirectories
+  --skip-empty     omit zero-byte files from the output
+  --full-path      show the full path in the table instead of the path
+                   relative to the directory argument
   -h, --help    show this help
   -V, --version show version
 ```
 
-Directories are expanded to their immediate files (not recursive). Debug
-bundles contain many empty init-container logs; `--skip-empty` hides them.
+Directories are expanded to their immediate files, or to everything beneath
+them with `-r`. In the table, files found under a directory argument are shown
+relative to that directory (`pods/redpanda-0/redpanda.txt`); pass `--full-path`
+to see the complete path instead. JSON output always has the full path in
+`file` and the display name in `name`. Debug bundles contain many empty
+init-container logs; `--skip-empty` hides them.
+
+```
+$ logspan -r --skip-empty bundle/
+file                              size     lines  start                     end                       duration
+logs/redpanda-0-redpanda.txt     41.4M   136,512  2026-09-15 14:22:31.242   2026-09-15 14:25:12.255   2m 41s
+logs/redpanda-0-sidecar.txt      82.8K       792  2026-09-14 00:01:45.414Z  2026-09-15 14:22:45.987Z  1d 14h 21m 0s
+```
 
 ```
 $ logspan redpanda-2-debug-bundle/logs
@@ -48,7 +62,7 @@ JSON output is one object per line, suitable for `jq`:
 
 ```
 $ logspan -j redpanda-2-redpanda.txt
-{"file": "redpanda-2-redpanda.txt", "size_bytes": 10333319, "size": "9.9M", "lines": 32491,
+{"file": "redpanda-2-redpanda.txt", "name": "redpanda-2-redpanda.txt", "size_bytes": 10333319, "size": "9.9M", "lines": 32491,
  "status": "ok", "start": "2026-09-15 14:24:30.060", "end": "2026-09-15 14:25:02.056",
  "duration": "31s", "duration_seconds": 31.996}
 ```

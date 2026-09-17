@@ -92,3 +92,22 @@ def test_unknown_flag_is_an_error():
     r = subprocess.run([sys.executable, "-m", "logspan", "--bogus", FIX],
                        capture_output=True, text=True)
     assert r.returncode == 2 and "unknown option" in r.stderr
+
+
+def test_recursive_and_display_names(tmp_path):
+    (tmp_path / "a" / "b").mkdir(parents=True)
+    (tmp_path / "top.log").write_text("INFO  2026-01-01 00:00:00,000 x\n")
+    (tmp_path / "a" / "b" / "deep.log").write_text("INFO  2026-01-01 00:00:00,000 x\n")
+    run = lambda *a: subprocess.run([sys.executable, "-m", "logspan", *a],
+                                    capture_output=True, text=True, check=True).stdout
+    flat = run(str(tmp_path))
+    assert "top.log" in flat and "deep.log" not in flat
+    rec = run("-r", str(tmp_path))
+    assert os.path.join("a", "b", "deep.log") in rec
+    assert str(tmp_path) not in rec
+    full = run("-r", "--full-path", str(tmp_path))
+    assert str(tmp_path / "a" / "b" / "deep.log") in full
+    rows = [json.loads(l) for l in run("-j", "-r", str(tmp_path)).splitlines()]
+    names = sorted(r["name"] for r in rows)
+    assert names == sorted([os.path.join("a", "b", "deep.log"), "top.log"])
+    assert all(os.path.isabs(r["file"]) for r in rows)

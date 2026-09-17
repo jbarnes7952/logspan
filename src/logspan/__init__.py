@@ -1,8 +1,11 @@
 """logspan - print start time, end time and duration of one or more log files.
 
-Usage: logspan [-j] [--skip-empty] FILE|DIR ...
-  -j            JSON output (one object per file)
-  --skip-empty  omit zero-byte files from the output
+Usage: logspan [-j] [-r] [--skip-empty] [--full-path] FILE|DIR ...
+  -j               JSON output (one object per file)
+  -r, --recursive  descend into subdirectories
+  --skip-empty     omit zero-byte files from the output
+  --full-path      show the full path in the table instead of the path
+                   relative to the directory argument
   -h, --help    show this help
   -V, --version show version
 
@@ -166,13 +169,14 @@ def count_lines(path):
     return n
 
 
-def span(path):
+def span(path, name=None):
+    name = name or os.path.basename(path)
     if not os.path.isfile(path):
-        return {"file": path, "size_bytes": 0, "size": "-", "lines": 0,
-                "status": "not found"}
+        return {"file": path, "name": name, "size_bytes": 0, "size": "-",
+                "lines": 0, "status": "not found"}
     size = os.path.getsize(path)
-    base = {"file": path, "size_bytes": size, "size": fmt_size(size),
-            "lines": count_lines(path) if size else 0}
+    base = {"file": path, "name": name, "size_bytes": size,
+            "size": fmt_size(size), "lines": count_lines(path) if size else 0}
     if size == 0:
         return {**base, "status": "empty"}
     a = first_ts(head_lines(path))
@@ -188,15 +192,24 @@ def span(path):
             "duration": fmt_dur(dur), "duration_seconds": dur.total_seconds()}
 
 
-def expand(args):
+def expand(args, recursive=False):
+    """Yield (path, display_name). Files under a directory argument are
+    displayed relative to that directory; bare file arguments as given."""
     for a in args:
         if os.path.isdir(a):
-            for n in sorted(os.listdir(a)):
-                p = os.path.join(a, n)
-                if os.path.isfile(p):
-                    yield p
+            if recursive:
+                for root, dirs, files in os.walk(a):
+                    dirs.sort()
+                    for n in sorted(files):
+                        p = os.path.join(root, n)
+                        yield p, os.path.relpath(p, a)
+            else:
+                for n in sorted(os.listdir(a)):
+                    p = os.path.join(a, n)
+                    if os.path.isfile(p):
+                        yield p, n
         else:
-            yield a
+            yield a, a
 
 
 def main(argv):
@@ -208,7 +221,9 @@ def main(argv):
         return 0
     as_json = "-j" in argv
     skip_empty = "--skip-empty" in argv
-    flags = {"-j", "--skip-empty"}
+    recursive = "-r" in argv or "--recursive" in argv
+    full_path = "--full-path" in argv
+    flags = {"-j", "--skip-empty", "-r", "--recursive", "--full-path"}
     unknown = [a for a in argv if a.startswith("-") and a not in flags]
     if unknown:
         print(f"logspan: unknown option {unknown[0]}", file=sys.stderr)
@@ -217,7 +232,7 @@ def main(argv):
     if not paths:
         print(__doc__.strip(), file=sys.stderr)
         return 2
-    rows = [span(p) for p in expand(paths)]
+    rows = [span(p, p if full_path else n) for p, n in expand(paths, recursive)]
     if skip_empty:
         rows = [r for r in rows if r["status"] != "empty"]
     if not rows:
@@ -226,10 +241,10 @@ def main(argv):
         for r in rows:
             print(json.dumps(r))
         return 0
-    w = max(len(os.path.basename(r["file"])) for r in rows)
+    w = max(len(r["name"]) for r in rows)
     print(f"{'file':<{w}}  {'size':>7} {'lines':>9}  {'start':<25} {'end':<25} duration")
     for r in rows:
-        name = os.path.basename(r["file"])
+        name = r["name"]
         pre = f"{name:<{w}}  {r['size']:>7} {r['lines']:>9,}  "
         if r["status"] != "ok":
             print(pre + f"({r['status']})")
