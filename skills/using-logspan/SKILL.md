@@ -21,12 +21,25 @@ of writing a timestamp-extraction pipeline; the output is already the answer.
 | A directory tree | `logspan -r DIR` (without `-r` only the top level is read) |
 | Only matching file names | `logspan -r -g '*.log,*.txt' DIR` |
 | Hide zero-byte files | `--skip-empty` |
-| JSON, one object per line | `logspan -j ... \| jq 'select(.status=="ok")'` |
+| JSON, one object per line | `logspan -j ...` (see below) |
 | Show full paths in the table | `--full-path` |
 
 Quote `-g` patterns so the shell does not expand them. `-g` applies to files
 found under directories; files named explicitly are always included. Zip
 archives are not opened.
+
+## Table or JSON
+
+The table is the default and costs about a third of the tokens of JSON; read
+it directly for up to a few dozen files. Use `-j` when computing over many
+files in one shell call, when paths contain spaces, or when you need
+`duration_seconds` or `year_assumed`. Intersection window of a set of logs
+that should overlap (latest start to earliest end):
+
+```
+logspan -j -g '*.log' DIR | jq -rs 'map(select(.status=="ok"))
+  | "\(map(.start)|max) -> \(map(.end)|min)"'
+```
 
 ## Reading the output
 
@@ -52,7 +65,7 @@ logspan -r -g '*.txt,*.log' --skip-empty bundle/
 ```
 
 Report the window per file and, for a set of files that should overlap, the
-intersection (latest start to earliest end). Files with much shorter windows
-than their peers were usually rotated or restarted recently.
+intersection (jq recipe above). Files with much shorter windows than their
+peers were usually rotated or restarted recently.
 
 If not installed: `uv tool install git+ssh://git@github.com/jbarnes7952/logspan`
