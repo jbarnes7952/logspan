@@ -132,7 +132,7 @@ the duration is computed on the naive wall-clock values.
 ## Claude Code skill
 
 `skills/using-logspan/SKILL.md` teaches a Claude Code agent when to reach for
-`logspan` and how to read its output on Redpanda debug bundles. Install by
+`logspan` instead of hand-rolling timestamp pipelines, and how to read its output. Install by
 symlinking it into your personal skills directory:
 
 ```sh
