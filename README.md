@@ -13,10 +13,31 @@ broker logs with JSON sidecar logs, but it works on most logs.
 
 ## Install
 
+The repo is private, so use SSH (or a token) with an account that has access.
+
 ```sh
-uv tool install git+<repo-url>          # or: pipx install git+<repo-url>
-# from a checkout:
+uv tool install git+ssh://git@github.com/jbarnes7952/logspan
+# or: pipx install git+ssh://git@github.com/jbarnes7952/logspan
+```
+
+From a local checkout:
+
+```sh
 uv tool install .
+```
+
+Upgrade or reinstall after pulling changes. Pass `--reinstall`: the version
+number rarely changes, and without it uv keeps its cached build.
+
+```sh
+uv tool install --force --reinstall git+ssh://git@github.com/jbarnes7952/logspan
+uv tool install --force --reinstall .      # from a checkout
+```
+
+Remove:
+
+```sh
+uv tool uninstall logspan
 ```
 
 No dependencies beyond the Python 3.9+ standard library. The single file
