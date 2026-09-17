@@ -129,6 +129,16 @@ the duration is computed on the naive wall-clock values.
 * Duration is computed between the first and last *found* timestamp, so an
   out-of-order line at either end skews it.
 
+## Claude Code skill
+
+`skills/using-logspan/SKILL.md` teaches a Claude Code agent when to reach for
+`logspan` and how to read its output on Redpanda debug bundles. Install by
+symlinking it into your personal skills directory:
+
+```sh
+ln -s "$PWD/skills/using-logspan" ~/.claude/skills/using-logspan
+```
+
 ## Development
 
 ```sh
