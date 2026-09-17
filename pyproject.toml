@@ -19,7 +19,7 @@ dependencies = []
 logspan = "logspan:cli"
 
 [project.urls]
-Homepage = "https://github.com/johnbarnes/logspan"
+Homepage = "https://github.com/jbarnes7952/logspan"
 
 [build-system]
 requires = ["hatchling"]
