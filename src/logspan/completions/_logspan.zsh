@@ -27,4 +27,10 @@ _logspan() {
   esac
 }
 
-_logspan "$@"
+# When autoloaded from $fpath zsh calls the function itself; when sourced via
+# eval "$(logspan --completion zsh)" we register it instead.
+if [[ ${zsh_eval_context[-1]} == loadautofunc ]]; then
+  _logspan "$@"
+else
+  compdef _logspan logspan
+fi
