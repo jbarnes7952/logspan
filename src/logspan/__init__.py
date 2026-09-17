@@ -38,7 +38,7 @@ MONTHS = {m: i for i, m in enumerate(
 
 ISO = re.compile(
     r"(?<!\d)(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})"
-    r"(?:[.,](\d{1,9}))?\s*(Z|[+-]\d{2}:?\d{2})?")
+    r"(?:[.,](\d{1,9}))?\s*(Z|[+-]\d{2}:?\d{2}|UTC|GMT)?")
 SYSLOG = re.compile(
     r"(?<![A-Za-z])(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})"
     r"\s+(\d{2}):(\d{2}):(\d{2})(?:[.,](\d{1,9}))?")
@@ -55,7 +55,7 @@ def _frac_to_us(frac):
 
 
 def _tz(s):
-    if not s or s == "Z":
+    if not s or s in ("Z", "UTC", "GMT"):
         return timezone.utc
     s = s.replace(":", "")
     sign = 1 if s[0] == "+" else -1

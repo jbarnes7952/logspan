@@ -17,8 +17,8 @@ of writing a timestamp-extraction pipeline; the output is already the answer.
 
 | Task | Command |
 |---|---|
-| Files or a directory | `logspan FILE... ` or `logspan DIR` |
-| Recurse into subdirectories | `logspan -r DIR` |
+| Files | `logspan FILE...` |
+| A directory tree | `logspan -r DIR` (without `-r` only the top level is read) |
 | Only matching file names | `logspan -r -g '*.log,*.txt' DIR` |
 | Hide zero-byte files | `--skip-empty` |
 | JSON, one object per line | `logspan -j ... \| jq 'select(.status=="ok")'` |
@@ -34,8 +34,8 @@ archives are not opened.
   JSON dumps and binary files report `no timestamp found`; that is expected.
 - A negative duration means the file is not chronological (for example a
   directory listing). Exclude it with `-g`.
-- Timestamps print as written in the file. A trailing `Z` or offset means the
-  source had a zone; otherwise it is whatever zone the writer used.
+- A trailing `Z` or offset in the output means the source had a zone (`Z`,
+  `UTC`, `GMT` or a numeric offset). No suffix means the file gave none.
 - Only the first and last timestamps are read. Gaps or ordering problems
   inside a file are not detected; check a specific minute with
   `grep -c 'YYYY-MM-DD HH:MM' FILE` if that matters.

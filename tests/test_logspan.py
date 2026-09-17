@@ -140,3 +140,11 @@ def test_completion_script_prints_and_matches_repo_copy():
     for opt in ("--json", "--recursive", "--glob", "--skip-empty",
                 "--full-path", "--completion", "--help", "--version"):
         assert opt in out, opt
+
+
+def test_trailing_utc_token_is_a_zone(tmp_path):
+    p = tmp_path / "pg.log"
+    p.write_text("2026-09-11 14:00:00.000 UTC [1] LOG: a\n2026-09-11 15:00:00.000 GMT [1] LOG: b\n")
+    r = logspan.span(str(p))
+    assert r["start"] == "2026-09-11 14:00:00.000Z"
+    assert r["end"] == "2026-09-11 15:00:00.000Z"
