@@ -29,10 +29,16 @@ def test_formats(name, start, end, dur, lines):
     assert r["lines"] == lines
 
 
-def test_syslog_uses_current_year():
-    r = logspan.span(f("syslog.log"))
+def test_syslog_uses_mtime_year(tmp_path):
+    import shutil, time
+    p = tmp_path / "syslog.log"
+    shutil.copy(f("syslog.log"), p)
+    t = time.mktime((2023, 9, 15, 16, 0, 0, 0, 0, -1))
+    os.utime(p, (t, t))
+    r = logspan.span(str(p))
     assert r["status"] == "ok"
     assert r["duration"] == "1h 0m 0s"
+    assert r["start"].startswith("2023-09-15 14:22:31")
 
 
 def test_empty_and_no_dates_and_missing():
@@ -150,14 +156,18 @@ def test_trailing_utc_token_is_a_zone(tmp_path):
     assert r["end"] == "2026-09-11 15:00:00.000Z"
 
 
-def test_syslog_year_wrap_rolls_forward(tmp_path):
+def test_syslog_year_wrap_uses_mtime_year_for_end(tmp_path):
+    import time
     p = tmp_path / "wrap.log"
     p.write_text("Dec 31 22:30:34 host a: x\nDec 31 23:59:59 host a: y\nJan 01 02:40:04 host a: z\n")
+    jan2_2025 = time.mktime((2025, 1, 2, 12, 0, 0, 0, 0, -1))
+    os.utime(p, (jan2_2025, jan2_2025))
     r = logspan.span(str(p))
     assert r["duration"] == "4h 9m 30s"
     assert r["duration_seconds"] == 4 * 3600 + 9 * 60 + 30
     assert r["year_assumed"] is True
-    assert r["end"][5:] == "01-01 02:40:04.000"
+    assert r["start"].startswith("2024-12-31 22:30:34")
+    assert r["end"].startswith("2025-01-01 02:40:04")
     out = subprocess.run([sys.executable, "-m", "logspan", str(p)],
                          capture_output=True, text=True, check=True).stdout
     assert "(year assumed)" in out

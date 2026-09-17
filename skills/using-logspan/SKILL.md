@@ -34,8 +34,8 @@ archives are not opened.
   JSON dumps and binary files report `no timestamp found`; that is expected.
 - A negative duration means the file is not chronological (for example a
   directory listing). Exclude it with `-g`.
-- `(year assumed)` marks year-less formats such as syslog. The current year
-  is used and a Dec to Jan wrap is rolled forward automatically, but a file
+- `(year assumed)` marks year-less formats such as syslog. The file's
+  modification year is used and a Dec to Jan wrap is handled, but a file
   spanning more than a year cannot be detected.
 - A trailing `Z` or offset in the output means the source had a zone (`Z`,
   `UTC`, `GMT` or a numeric offset). No suffix means the file gave none.

@@ -21,8 +21,9 @@ the head and backward from the tail so large files are cheap. Handles:
   * Redpanda/Seastar:  INFO  2026-09-15 14:22:31,242 [shard 0] ...
   * ISO-8601 / RFC3339 (JSON "ts", Go, k8s):  2026-09-14T00:01:45.414Z
   * ISO with space separator and dot/comma millis, optional tz offset
-  * syslog:  Sep 15 14:22:31  (no year: current year assumed, rolled forward
-    across a Dec->Jan wrap; such rows are marked "year assumed")
+  * syslog:  Sep 15 14:22:31  (no year: the file's mtime year is assumed for
+    the last entry, a Dec->Jan wrap moves the first entry back a year; such
+    rows are marked "year assumed")
   * Apache/nginx:  [15/Sep/2026:14:22:31 +0000]
   * Epoch seconds/millis at line start
 """
@@ -63,9 +64,10 @@ def _tz(s):
     return timezone(sign * timedelta(hours=int(s[1:3]), minutes=int(s[3:5])))
 
 
-def parse_ts(line):
+def parse_ts(line, default_year=None):
     """Return (datetime, has_tz, year_assumed) for the first timestamp on the
-    line, or None. year_assumed is True for formats that carry no year."""
+    line, or None. year_assumed is True for formats that carry no year; those
+    get `default_year` (the current year if not given)."""
     m = ISO.search(line)
     if m:
         y, mo, d, h, mi, s, frac, tz = m.groups()
@@ -87,7 +89,8 @@ def parse_ts(line):
     if m:
         mon, d, h, mi, s, frac = m.groups()
         try:
-            return datetime(datetime.now().year, MONTHS[mon], int(d), int(h),
+            year = default_year or datetime.now().year
+            return datetime(year, MONTHS[mon], int(d), int(h),
                             int(mi), int(s), _frac_to_us(frac)), False, True
         except ValueError:
             pass
@@ -123,9 +126,9 @@ def tail_lines(path):
         yield ln.decode("utf-8", "replace")
 
 
-def first_ts(lines):
+def first_ts(lines, default_year=None):
     for ln in lines:
-        r = parse_ts(ln)
+        r = parse_ts(ln, default_year)
         if r:
             return r
     return None
@@ -186,8 +189,11 @@ def span(path, name=None):
             "size": fmt_size(size), "lines": count_lines(path) if size else 0}
     if size == 0:
         return {**base, "status": "empty"}
-    a = first_ts(head_lines(path))
-    b = first_ts(tail_lines(path))
+    # Year-less formats get the year the file was last written, which is the
+    # year of its final entry.
+    mtime_year = datetime.fromtimestamp(os.path.getmtime(path)).year
+    a = first_ts(head_lines(path), mtime_year)
+    b = first_ts(tail_lines(path), mtime_year)
     if not a or not b:
         return {**base, "status": "no timestamp found"}
     (start, tz_a, ya), (end, tz_b, yb) = a, b
@@ -196,8 +202,9 @@ def span(path, name=None):
     year_assumed = ya or yb
     if ya and yb and end < start:
         # Year-less format (syslog) wrapping a year boundary: the file is in
-        # order, the assumed year is what is wrong. Roll the end forward.
-        end = end.replace(year=end.year + 1)
+        # order, the assumed year is what is wrong. The end matches the
+        # file's mtime year, so the start belongs to the year before.
+        start = start.replace(year=start.year - 1)
     dur = end - start
     return {**base, "status": "ok",
             "start": fmt_dt(start), "end": fmt_dt(end),
