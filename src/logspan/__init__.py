@@ -10,6 +10,7 @@ Usage: logspan [-j] [-r] [-g PATTERN]... [--skip-empty] [--full-path] FILE|DIR .
   --skip-empty      omit zero-byte files from the output
   --full-path       show the full path in the table instead of the path
                     relative to the directory argument
+  --completion zsh  print a zsh completion script (see README)
   -h, --help    show this help
   -V, --version show version
 
@@ -222,6 +223,13 @@ def expand(args, recursive=False, patterns=()):
             yield a, a
 
 
+def completion_script(shell):
+    """Return the completion script bundled at src/logspan/completions/."""
+    here = os.path.join(os.path.dirname(__file__), "completions")
+    with open(os.path.join(here, f"_logspan.{shell}")) as f:
+        return f.read()
+
+
 def build_parser():
     ap = argparse.ArgumentParser(
         prog="logspan", add_help=False,
@@ -232,6 +240,7 @@ def build_parser():
     ap.add_argument("-g", "--glob", action="append", default=[], metavar="PAT")
     ap.add_argument("--skip-empty", action="store_true")
     ap.add_argument("--full-path", action="store_true")
+    ap.add_argument("--completion", choices=["zsh"], metavar="SHELL")
     ap.add_argument("-h", "--help", action="store_true")
     ap.add_argument("-V", "--version", action="store_true")
     return ap
@@ -245,6 +254,9 @@ def main(argv):
         return 2
     if ns.version:
         print(f"logspan {__version__}")
+        return 0
+    if ns.completion:
+        print(completion_script(ns.completion), end="")
         return 0
     if ns.help or not ns.paths:
         print(__doc__.strip(), file=sys.stdout if ns.help else sys.stderr)

@@ -128,3 +128,15 @@ def test_glob_filter(tmp_path):
     # explicit file arguments bypass the filter
     assert names(run("-g", "*.log", str(tmp_path / "c.json"))) == [str(tmp_path / "c.json")]
     assert run("-g", "*.nomatch", str(tmp_path)) == []
+
+
+def test_completion_script_prints_and_matches_repo_copy():
+    out = subprocess.run([sys.executable, "-m", "logspan", "--completion", "zsh"],
+                         capture_output=True, text=True, check=True).stdout
+    assert out.startswith("#compdef logspan")
+    repo = os.path.join(os.path.dirname(__file__), "..", "completions", "_logspan")
+    assert out == open(repo).read()
+    # every long option the parser knows appears in the completion script
+    for opt in ("--json", "--recursive", "--glob", "--skip-empty",
+                "--full-path", "--completion", "--help", "--version"):
+        assert opt in out, opt

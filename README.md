@@ -82,6 +82,28 @@ $ logspan -j redpanda-2-redpanda.txt
 
 `status` is one of `ok`, `empty`, `no timestamp found`, `not found`.
 
+## Shell completion (zsh)
+
+Completes options, `-g` pattern suggestions, and paths. Either source it from
+the installed command in `~/.zshrc`:
+
+```sh
+eval "$(logspan --completion zsh)"
+```
+
+or install the file into your `fpath` once (faster shell startup):
+
+```sh
+mkdir -p ~/.zsh/completions
+logspan --completion zsh > ~/.zsh/completions/_logspan
+# in ~/.zshrc, before compinit:
+fpath=(~/.zsh/completions $fpath)
+autoload -Uz compinit && compinit
+```
+
+The same file lives at `src/logspan/completions/_logspan.zsh` in this repo
+(`completions/_logspan` is a symlink to it).
+
 ## Recognised timestamp formats
 
 | Style | Example |
