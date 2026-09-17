@@ -80,7 +80,8 @@ $ logspan -j redpanda-2-redpanda.txt
  "duration": "31s", "duration_seconds": 31.996}
 ```
 
-`status` is one of `ok`, `empty`, `no timestamp found`, `not found`.
+`status` is one of `ok`, `empty`, `no timestamp found`, `not found`. `year_assumed`
+is true when the format carried no year.
 
 ## Shell completion (zsh)
 
@@ -110,7 +111,7 @@ The same file lives at `src/logspan/completions/_logspan.zsh` in this repo
 |---|---|
 | Redpanda / Seastar | `INFO  2026-09-15 14:22:31,242 [shard 0] ...` |
 | ISO-8601 / RFC3339 (JSON `ts`, Go, Kubernetes) | `2026-09-14T00:01:45.414Z`, `2026-09-14 00:01:45.414+02:00` |
-| syslog | `Sep 15 14:22:31` (year assumed to be the current year) |
+| syslog | `Sep 15 14:22:31` (no year: current year assumed, Dec to Jan wrap rolled forward, row marked `(year assumed)`) |
 | Apache / nginx access | `[15/Sep/2026:14:22:31 +0000]` |
 | Epoch seconds or millis at line start | `1789000000.123`, `1789000000123` |
 

@@ -21,7 +21,8 @@ the head and backward from the tail so large files are cheap. Handles:
   * Redpanda/Seastar:  INFO  2026-09-15 14:22:31,242 [shard 0] ...
   * ISO-8601 / RFC3339 (JSON "ts", Go, k8s):  2026-09-14T00:01:45.414Z
   * ISO with space separator and dot/comma millis, optional tz offset
-  * syslog:  Sep 15 14:22:31  (year assumed = current year)
+  * syslog:  Sep 15 14:22:31  (no year: current year assumed, rolled forward
+    across a Dec->Jan wrap; such rows are marked "year assumed")
   * Apache/nginx:  [15/Sep/2026:14:22:31 +0000]
   * Epoch seconds/millis at line start
 """
@@ -63,14 +64,15 @@ def _tz(s):
 
 
 def parse_ts(line):
-    """Return (datetime, has_tz) for the first timestamp on the line, or None."""
+    """Return (datetime, has_tz, year_assumed) for the first timestamp on the
+    line, or None. year_assumed is True for formats that carry no year."""
     m = ISO.search(line)
     if m:
         y, mo, d, h, mi, s, frac, tz = m.groups()
         try:
             dt = datetime(int(y), int(mo), int(d), int(h), int(mi), int(s),
                           _frac_to_us(frac), tzinfo=_tz(tz) if tz else None)
-            return dt, bool(tz)
+            return dt, bool(tz), False
         except ValueError:
             pass
     m = APACHE.search(line)
@@ -78,7 +80,7 @@ def parse_ts(line):
         d, mon, y, h, mi, s, tz = m.groups()
         try:
             return datetime(int(y), MONTHS[mon], int(d), int(h), int(mi), int(s),
-                            tzinfo=_tz(tz) if tz else None), bool(tz)
+                            tzinfo=_tz(tz) if tz else None), bool(tz), False
         except ValueError:
             pass
     m = SYSLOG.search(line)
@@ -86,7 +88,7 @@ def parse_ts(line):
         mon, d, h, mi, s, frac = m.groups()
         try:
             return datetime(datetime.now().year, MONTHS[mon], int(d), int(h),
-                            int(mi), int(s), _frac_to_us(frac)), False
+                            int(mi), int(s), _frac_to_us(frac)), False, True
         except ValueError:
             pass
     m = EPOCH.search(line)
@@ -94,7 +96,7 @@ def parse_ts(line):
         secs, frac, ms = m.groups()
         us = _frac_to_us(frac) if frac else (int(ms) * 1000 if ms else 0)
         return datetime.fromtimestamp(int(secs), tz=timezone.utc).replace(
-            microsecond=us), True
+            microsecond=us), True, False
     return None
 
 
@@ -188,13 +190,19 @@ def span(path, name=None):
     b = first_ts(tail_lines(path))
     if not a or not b:
         return {**base, "status": "no timestamp found"}
-    (start, tz_a), (end, tz_b) = a, b
+    (start, tz_a, ya), (end, tz_b, yb) = a, b
     if tz_a != tz_b:                       # mixed aware/naive; compare naively
         start, end = start.replace(tzinfo=None), end.replace(tzinfo=None)
+    year_assumed = ya or yb
+    if ya and yb and end < start:
+        # Year-less format (syslog) wrapping a year boundary: the file is in
+        # order, the assumed year is what is wrong. Roll the end forward.
+        end = end.replace(year=end.year + 1)
     dur = end - start
     return {**base, "status": "ok",
             "start": fmt_dt(start), "end": fmt_dt(end),
-            "duration": fmt_dur(dur), "duration_seconds": dur.total_seconds()}
+            "duration": fmt_dur(dur), "duration_seconds": dur.total_seconds(),
+            "year_assumed": year_assumed}
 
 
 def matches(name, patterns):
@@ -283,7 +291,8 @@ def main(argv):
         if r["status"] != "ok":
             print(pre + f"({r['status']})")
         else:
-            print(pre + f"{r['start']:<25} {r['end']:<25} {r['duration']}")
+            note = "  (year assumed)" if r.get("year_assumed") else ""
+            print(pre + f"{r['start']:<25} {r['end']:<25} {r['duration']}{note}")
     return 0
 
 

@@ -148,3 +148,21 @@ def test_trailing_utc_token_is_a_zone(tmp_path):
     r = logspan.span(str(p))
     assert r["start"] == "2026-09-11 14:00:00.000Z"
     assert r["end"] == "2026-09-11 15:00:00.000Z"
+
+
+def test_syslog_year_wrap_rolls_forward(tmp_path):
+    p = tmp_path / "wrap.log"
+    p.write_text("Dec 31 22:30:34 host a: x\nDec 31 23:59:59 host a: y\nJan 01 02:40:04 host a: z\n")
+    r = logspan.span(str(p))
+    assert r["duration"] == "4h 9m 30s"
+    assert r["duration_seconds"] == 4 * 3600 + 9 * 60 + 30
+    assert r["year_assumed"] is True
+    assert r["end"][5:] == "01-01 02:40:04.000"
+    out = subprocess.run([sys.executable, "-m", "logspan", str(p)],
+                         capture_output=True, text=True, check=True).stdout
+    assert "(year assumed)" in out
+
+
+def test_year_assumed_false_for_dated_formats():
+    assert logspan.span(f("seastar.log"))["year_assumed"] is False
+    assert logspan.span(f("syslog.log"))["year_assumed"] is True
